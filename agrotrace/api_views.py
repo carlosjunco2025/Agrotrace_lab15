@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import EvaluacionCalidadLote, FundoProductor, LoteRecepcionado
+from .permissions import PuedeGestionarAgrotrace
 from .serializers import (
     EvaluacionCalidadSerializer,
     EvaluacionCalidadDetalladaSerializer,
@@ -32,6 +33,17 @@ def api_me(request):
     }, status=status.HTTP_200_OK)
 
 
+class PermisosPorAccionMixin:
+    """GET autenticado; crear/editar gestores; borrar solo administrador."""
+
+    def get_permissions(self):
+        if self.action == 'destroy':
+            return [IsAuthenticated(), IsAdminUser()]
+        if self.action in {'create', 'update', 'partial_update'}:
+            return [IsAuthenticated(), PuedeGestionarAgrotrace()]
+        return [IsAuthenticated()]
+
+
 class EstadoFilterMixin:
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -41,7 +53,7 @@ class EstadoFilterMixin:
         return queryset
 
 
-class FundoProductorViewSet(viewsets.ModelViewSet):
+class FundoProductorViewSet(PermisosPorAccionMixin, viewsets.ModelViewSet):
     queryset = FundoProductor.objects.all()
     serializer_class = FundoProductorSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -49,12 +61,12 @@ class FundoProductorViewSet(viewsets.ModelViewSet):
     ordering_fields = ['hectareas', 'id']
 
 
-class EvaluacionCalidadViewSet(viewsets.ModelViewSet):
+class EvaluacionCalidadViewSet(PermisosPorAccionMixin, viewsets.ModelViewSet):
     queryset = EvaluacionCalidadLote.objects.select_related('lote')
     serializer_class = EvaluacionCalidadSerializer
 
 
-class EvaluacionCalidadDetalladaViewSet(viewsets.ReadOnlyModelViewSet):
+class EvaluacionCalidadDetalladaViewSet(PermisosPorAccionMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = EvaluacionCalidadDetalladaSerializer
 
     def get_queryset(self):
@@ -76,12 +88,15 @@ class EvaluacionCalidadDetalladaViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
-class LoteViewSet(EstadoFilterMixin, viewsets.ModelViewSet):
+class LoteViewSet(PermisosPorAccionMixin, EstadoFilterMixin, viewsets.ModelViewSet):
     queryset = LoteRecepcionado.objects.all()
     serializer_class = LoteSimpleSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['codigo_lote', 'fundo__nombre_fundo']
     ordering_fields = ['toneladas_brutas', 'id']
+
+    def perform_create(self, serializer):
+        serializer.save(registrado_por=self.request.user)
 
     @action(detail=False, methods=['get'])
     def pendientes(self, request):
@@ -90,7 +105,7 @@ class LoteViewSet(EstadoFilterMixin, viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class LoteDetalladoViewSet(EstadoFilterMixin, viewsets.ReadOnlyModelViewSet):
+class LoteDetalladoViewSet(PermisosPorAccionMixin, EstadoFilterMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = LoteDetalladoSerializer
     queryset = LoteRecepcionado.objects.select_related(
         'fundo',

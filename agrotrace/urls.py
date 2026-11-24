@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from catalogo.api_views import CategoriaViewSet, ProductoViewSet
 from comercializacion.api_views import (
     ClienteAgroViewSet,
+    OrdenComercialViewSet,
     OrdenDespachoViewSet,
     PagoDespachoViewSet,
     ProductoAgroViewSet,
@@ -56,6 +57,12 @@ router.register(
     r'ordenes-despacho',
     OrdenDespachoViewSet,
     basename='orden-despacho',
+)
+# S15: alias semántico "OrdenComercial" sobre la misma entidad privada.
+router.register(
+    r'ordenes-comerciales',
+    OrdenComercialViewSet,
+    basename='orden-comercial',
 )
 router.register(r'pagos-despacho', PagoDespachoViewSet, basename='pago-despacho')
 

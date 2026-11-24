@@ -8,6 +8,7 @@ from django.db.models import F
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
@@ -52,17 +53,35 @@ class ProductoAgroViewSet(viewsets.ModelViewSet):
 
 
 class PagoDespachoViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = PagoDespacho.objects.select_related('orden')
     serializer_class = PagoDespachoSerializer
 
+    def get_queryset(self):
+        usuario = self.request.user
+        base = PagoDespacho.objects.select_related('orden')
+        if usuario.is_staff:
+            return base
+        return base.filter(orden__registrado_por=usuario)
 
-class OrdenDespachoViewSet(viewsets.ModelViewSet):
-    queryset = OrdenDespacho.objects.select_related('cliente', 'pago').prefetch_related(
-        'detalles__producto',
-    )
+
+class OrdenComercialViewSet(viewsets.ModelViewSet):
+    """OrdenComercial (OrdenDespacho): registros privados por usuario creador."""
+
     serializer_class = OrdenDespachoSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['cliente__nombre', 'estado']
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        base = OrdenDespacho.objects.select_related('cliente', 'pago').prefetch_related(
+            'detalles__producto',
+        )
+        if self.request.user.is_staff:
+            return base
+        # Un operador solo ve sus propias órdenes; un ID ajeno responde 404.
+        return base.filter(registrado_por=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(registrado_por=self.request.user)
 
     @action(detail=False, methods=['post'], url_path='crear')
     def crear_orden(self, request):
@@ -111,10 +130,16 @@ class OrdenDespachoViewSet(viewsets.ModelViewSet):
                 Decimal('0.00'),
             )
 
+            kg_totales = sum((item['cantidad_kg'] for item in items), Decimal('0'))
+            precio_unitario = max(p.precio_kg for p in productos.values()) * Decimal('20')
             orden = OrdenDespacho.objects.create(
                 cliente=cliente,
                 estado=OrdenDespacho.ESTADO_PENDIENTE,
                 total=total,
+                registrado_por=request.user,
+                cantidad_sacos=int(kg_totales / Decimal('20')),
+                precio_unitario_aplicado=precio_unitario,
+                total_valorizado=total,
             )
             for item in items:
                 producto = productos[item['producto'].pk]
@@ -141,3 +166,7 @@ class OrdenDespachoViewSet(viewsets.ModelViewSet):
             OrdenDespachoSerializer(orden).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+# Compatibilidad con el nombre usado en la Semana 14.
+OrdenDespachoViewSet = OrdenComercialViewSet
