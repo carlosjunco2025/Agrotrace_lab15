@@ -22,6 +22,7 @@ from .models import (
 from .serializers import (
     ClienteAgroSerializer,
     CrearOrdenDespachoSerializer,
+    OrdenComercialSerializer,
     OrdenDespachoSerializer,
     PagoDespachoSerializer,
     ProductoAgroSerializer,
@@ -66,7 +67,7 @@ class PagoDespachoViewSet(viewsets.ReadOnlyModelViewSet):
 class OrdenComercialViewSet(viewsets.ModelViewSet):
     """OrdenComercial (OrdenDespacho): registros privados por usuario creador."""
 
-    serializer_class = OrdenDespachoSerializer
+    serializer_class = OrdenComercialSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['cliente__nombre', 'estado']
     permission_classes = [IsAuthenticated]

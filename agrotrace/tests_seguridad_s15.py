@@ -10,7 +10,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from agrotrace.models import FundoProductor, LoteRecepcionado, PerfilUsuario
-from comercializacion.models import ClienteAgro, OrdenDespacho
+from comercializacion.models import ClienteAgro, OrdenDespacho, ProductoAgro, ProductorAgro
 
 CLAVE = 'AgroTrace.S15.2026!'
 
@@ -48,6 +48,13 @@ class SeguridadAgroTraceTests(APITestCase):
         )
         self.orden_op2 = OrdenDespacho.objects.create(
             cliente=cliente, registrado_por=self.op2, total=Decimal('200.00'),
+        )
+        productor = ProductorAgro.objects.create(
+            nombre='Productor QA', ruc='20999000997', region='Cajamarca',
+        )
+        self.producto = ProductoAgro.objects.create(
+            codigo='AG-QA', nombre='Café QA', stock_kg=Decimal('1000.00'),
+            precio_kg=Decimal('50.00'), productor=productor,
         )
 
     def autenticar(self, usuario):
@@ -119,3 +126,54 @@ class SeguridadAgroTraceTests(APITestCase):
     def test_listado_ordenes_filtrado_por_usuario(self):
         respuesta = self.autenticar(self.op1).get('/api/ordenes-comerciales/')
         self.assertEqual([item['id'] for item in respuesta.data], [self.orden_op1.pk])
+
+    def test_validaciones_lote_responden_400(self):
+        cliente = self.autenticar(self.op1)
+        base = {
+            'codigo_lote': 'LOT-QA-002',
+            'toneladas_brutas': '5.00',
+            'cantidad_sacos': 20,
+            'estado_evaluacion': 'PENDIENTE',
+            'fundo': self.fundo.pk,
+        }
+        self.assertEqual(cliente.post('/api/lotes/', {**base, 'codigo_lote': 'xss'}, format='json').status_code, 400)
+        self.assertEqual(cliente.post('/api/lotes/', {**base, 'toneladas_brutas': '0'}, format='json').status_code, 400)
+        self.assertEqual(cliente.post('/api/lotes/', {**base, 'toneladas_brutas': '9999'}, format='json').status_code, 400)
+        self.assertEqual(cliente.post('/api/lotes/', {**base, 'cantidad_sacos': 0}, format='json').status_code, 400)
+        self.assertEqual(cliente.post('/api/lotes/', {**base, 'cantidad_sacos': 501}, format='json').status_code, 400)
+        self.assertEqual(cliente.post('/api/lotes/', {**base, 'estado_evaluacion': 'INVENTADO'}, format='json').status_code, 400)
+
+    def test_total_lote_calculado_servidor_ignora_json(self):
+        cliente = self.autenticar(self.op1)
+        respuesta = cliente.post('/api/lotes/', {
+            'codigo_lote': 'LOT-QA-003',
+            'toneladas_brutas': '10.00',
+            'cantidad_sacos': 40,
+            'fundo': self.fundo.pk,
+            'total_valorizado': '1.00',
+            'precio_unitario_aplicado': '1.00',
+            'registrado_por': self.admin.pk,
+        }, format='json')
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(respuesta.data['total_valorizado'], '8500.00')
+        self.assertEqual(respuesta.data['precio_unitario_aplicado'], '850.00')
+        self.assertEqual(respuesta.data['registrado_por'], self.op1.pk)
+
+    def test_validaciones_y_total_orden_comercial(self):
+        cliente = self.autenticar(self.op1)
+        cliente_pk = ClienteAgro.objects.get(documento='20999000998').pk
+        base = {
+            'cliente': cliente_pk,
+            'producto': self.producto.pk,
+            'cantidad_sacos': 10,
+        }
+        self.assertEqual(cliente.post('/api/ordenes-comerciales/', {**base, 'cantidad_sacos': 0}, format='json').status_code, 400)
+        self.assertEqual(cliente.post('/api/ordenes-comerciales/', {**base, 'cantidad_sacos': 501}, format='json').status_code, 400)
+        self.assertEqual(cliente.post('/api/ordenes-comerciales/', {**base, 'estado': 'INVENTADO'}, format='json').status_code, 400)
+        respuesta = cliente.post('/api/ordenes-comerciales/', {
+            **base, 'total_valorizado': '1.00', 'precio_unitario_aplicado': '1.00',
+            'registrado_por': self.admin.pk,
+        }, format='json')
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(respuesta.data['total_valorizado'], '10000.00')
+        self.assertEqual(respuesta.data['registrado_por'], self.op1.pk)
