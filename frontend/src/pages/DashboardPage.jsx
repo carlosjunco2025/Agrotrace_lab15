@@ -1,7 +1,9 @@
 import PaginaBase from './PaginaBase.jsx'
+import SeguridadPanel from '../components/SeguridadPanel.jsx'
 
 function DashboardPage() {
   return (
+    <>
     <PaginaBase
       etiqueta="Parte 2 · proyecto integrador AgroTrace"
       titulo="Panel de control"
@@ -18,6 +20,8 @@ function DashboardPage() {
         'S14: modelos de negocio; S15: pedidos y pagos; S16: trazabilidad.',
       ]}
     />
+    <SeguridadPanel />
+    </>
   )
 }
 
