@@ -11,6 +11,7 @@ import ProductoresPage from './pages/ProductoresPage.jsx'
 import LotesPage from './pages/LotesPage.jsx'
 import PedidosPage from './pages/PedidosPage.jsx'
 import TrazabilidadPage from './pages/TrazabilidadPage.jsx'
+import Login from './pages/Login.jsx'
 
 const ENLACES = [
   { grupo: 'General', rutas: [{ to: '/', texto: 'Inicio' }] },
@@ -89,6 +90,7 @@ function App() {
 
         <main className="app-main">
           <Routes>
+            <Route path="/login" element={<Login />} />
             <Route path="/" element={<DashboardPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/practica" element={<ListaPractica />} />

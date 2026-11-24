@@ -1,5 +1,15 @@
 import axios from 'axios'
 
+export const TOKEN_KEY = 'agrotrace_token'
+export const PERFIL_KEY = 'agrotrace_perfil'
+
+/** Borra token y perfil: se usa al cerrar sesión y ante un 401. */
+export function limpiarSesion() {
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(PERFIL_KEY)
+  window.dispatchEvent(new Event('agrotrace-auth'))
+}
+
 // Instancia única de Axios para toda la aplicación.
 // El backend de Django se levanta en el puerto 8000 con el prefijo /api/.
 const api = axios.create({
@@ -46,5 +56,31 @@ export function mensajeDeError(error, respaldo = 'Ocurrió un error inesperado.'
   const errores = normalizarErrores(error.response)
   return errores.general ?? errores.detail ?? respaldo
 }
+
+// S15: adjunta el token a TODAS las peticiones y reacciona al 401.
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (token) {
+      config.headers.Authorization = `Token ${token}`
+    }
+    return config
+  },
+  (error) => Promise.reject(error),
+)
+
+api.interceptors.response.use(
+  (respuesta) => respuesta,
+  (error) => {
+    if (
+      error?.response?.status === 401 &&
+      !window.location.pathname.startsWith('/login')
+    ) {
+      limpiarSesion()
+      window.location.assign('/login')
+    }
+    return Promise.reject(error)
+  },
+)
 
 export default api
