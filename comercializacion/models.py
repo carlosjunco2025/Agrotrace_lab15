@@ -10,7 +10,9 @@ Criterios de on_delete aplicados:
     no tienen sentido si la orden desaparece.
 """
 
+from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class ProductorAgro(models.Model):
@@ -80,6 +82,23 @@ class OrdenDespacho(models.Model):
     estado = models.CharField(max_length=20, choices=ESTADOS, default=ESTADO_PENDIENTE)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    # S15: OrdenComercial privada por usuario y valorización calculada en servidor.
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ordenes_registradas',
+    )
+    cantidad_sacos = models.PositiveIntegerField(default=0)
+    precio_unitario_aplicado = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0.00,
+    )
+    total_valorizado = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0.00,
+    )
+    fecha_registro = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
         ordering = ['-fecha_creacion', '-id']

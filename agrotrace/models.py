@@ -1,4 +1,6 @@
+from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class CentroAcopio(models.Model):
@@ -31,9 +33,42 @@ class FundoProductor(models.Model):
     hectareas = models.DecimalField(max_digits=8, decimal_places=2)
     valido_exportacion = models.BooleanField(default=False)
     cupo_diario_lotes = models.IntegerField(default=10)
+    # S15: stock y precio de referencia se leen desde la BD, nunca del cliente.
+    stock_disponible_tn = models.DecimalField(max_digits=10, decimal_places=2, default=500.00)
+    precio_referencia_tn = models.DecimalField(max_digits=10, decimal_places=2, default=850.00)
 
     def __str__(self):
         return self.nombre_fundo
+
+
+class PerfilUsuario(models.Model):
+    """S15: rol y fundo asignado de cada usuario del panel AgroTrace."""
+
+    ROL_ADMINISTRADOR = 'ADMINISTRADOR'
+    ROL_OPERADOR = 'OPERADOR'
+    ROL_PRODUCTOR = 'PRODUCTOR'
+    ROLES = [
+        (ROL_ADMINISTRADOR, 'Administrador'),
+        (ROL_OPERADOR, 'Operador'),
+        (ROL_PRODUCTOR, 'Productor'),
+    ]
+
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='perfil_agrotrace',
+    )
+    rol = models.CharField(max_length=20, choices=ROLES, default=ROL_OPERADOR)
+    fundo = models.ForeignKey(
+        FundoProductor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='perfiles',
+    )
+
+    def __str__(self):
+        return f'{self.usuario.username} · {self.rol}'
 
 
 # --- QUERYSET PERSONALIZADO (Ejercicio 7) ---
@@ -73,6 +108,23 @@ class LoteRecepcionado(models.Model):
     porcentaje_descarte = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     estado_evaluacion = models.CharField(max_length=50, default='PENDIENTE')
     fecha_ingreso = models.DateTimeField(auto_now_add=True)
+
+    # S15: trazabilidad y datos derivados calculados siempre en el servidor.
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lotes_registrados',
+    )
+    cantidad_sacos = models.PositiveIntegerField(default=0)
+    precio_unitario_aplicado = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0.00,
+    )
+    total_valorizado = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0.00,
+    )
+    fecha_registro = models.DateTimeField(default=timezone.now, editable=False)
 
     # Relación N:M mediante tabla intermedia 'through'
     certificaciones = models.ManyToManyField(
