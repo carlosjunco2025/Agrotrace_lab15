@@ -1,5 +1,8 @@
-from rest_framework import filters, viewsets
-from rest_framework.decorators import action
+from django.contrib.auth import get_user_model
+
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import EvaluacionCalidadLote, FundoProductor, LoteRecepcionado
@@ -10,6 +13,23 @@ from .serializers import (
     LoteDetalladoSerializer,
     LoteSimpleSerializer,
 )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_me(request):
+    """Perfil del usuario autenticado; nunca expone password ni hash."""
+    usuario = get_user_model().objects.get(pk=request.user.pk)
+    perfil = getattr(usuario, 'perfil_agrotrace', None)
+    return Response({
+        'id': usuario.id,
+        'username': usuario.username,
+        'email': usuario.email,
+        'is_staff': usuario.is_staff,
+        'rol': perfil.rol if perfil else (
+            'ADMINISTRADOR' if usuario.is_superuser else 'OPERADOR'
+        ),
+    }, status=status.HTTP_200_OK)
 
 
 class EstadoFilterMixin:

@@ -5,6 +5,7 @@ Ejecutar: python manage.py test agrotrace.tests_semana14 -v 2
 
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.db.models import ProtectedError
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -18,6 +19,11 @@ from pedidos.models import Cliente, DetallePedido, Pago, Pedido
 
 class Semana14Tests(APITestCase):
     def setUp(self):
+        # S15: la API exige autenticación por token/sesión.
+        self.usuario = get_user_model().objects.create_user(
+            username='qa_s14', password='Prueba.S15.2026!',
+        )
+        self.client.force_authenticate(user=self.usuario)
         self.categoria = Categoria.objects.create(nombre='Bebidas')
         self.producto = Producto.objects.create(
             nombre='Café de origen',
